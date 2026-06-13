@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Icon Resizer App</title>
+    <style>
+        :root {
+            --primary: #4F46E5;
+            --primary-hover: #4338CA;
+            --bg: #F3F4F6;
+            --card-bg: #FFFFFF;
+            --text: #1F2937;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            width: 100%;
+            max-width: 450px;
+            text-align: center;
+        }
+
+        h1 {
+            margin-top: 0;
+            font-size: 1.5rem;
+            color: var(--text);
+        }
+
+        p {
+            color: #6B7280;
+            font-size: 0.9rem;
+            margin-bottom: 20px;
+        }
+
+        .upload-area {
+            border: 2px dashed #D1D5DB;
+            border-radius: 8px;
+            padding: 20px;
+            cursor: pointer;
+            transition: border-color 0.2s;
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        .upload-area:hover {
+            border-color: var(--primary);
+        }
+
+        input[type="file"] {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        #preview-container {
+            display: none;
+            margin: 20px 0;
+        }
+
+        #preview {
+            max-width: 150px;
+            max-height: 150px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .buttons {
+            display: none;
+            gap: 10px;
+            flex-direction: column;
+        }
+
+        button {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 6px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            font-weight: 500;
+            width: 100%;
+        }
+
+        button:hover {
+            background-color: var(--primary-hover);
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .btn-group button {
+            flex: 1;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h1>App Icon Generator</h1>
+        <p>Upload an image to resize and convert it to PNG.</p>
+        
+        <div class="upload-area">
+            <span id="upload-text">Drag & drop or click to upload image</span>
+            <input type="file" id="imageInput" accept="image/*">
+        </div>
+
+        <div id="preview-container">
+            <p style="margin-bottom: 10px; font-size: 0.8rem;">Image Preview:</p>
+            <img id="preview" src="" alt="Image Preview">
+        </div>
+
+        <div class="buttons" id="actionButtons">
+            <div class="btn-group">
+                <button onclick="resizeAndDownload(192)">192x192</button>
+                <button onclick="resizeAndDownload(512)">512x512</button>
+            </div>
+            <button onclick="downloadBoth()" style="background-color: #10B981;">Download Both</button>
+        </div>
+    </div>
+
+    <script>
+        let currentImage = null;
+
+        // Handle image upload and preview
+        document.getElementById('imageInput').addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            // Change upload text to show file name
+            document.getElementById('upload-text').textContent = file.name;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    currentImage = img;
+                    // Show preview
+                    const preview = document.getElementById('preview');
+                    preview.src = img.src;
+                    document.getElementById('preview-container').style.display = 'block';
+                    
+                    // Show download buttons
+                    document.getElementById('actionButtons').style.display = 'flex';
+                }
+                img.src = e.target.result;
+            }
+            reader.readAsDataURL(file);
+        });
+
+        // Function to resize and trigger download
+        function resizeAndDownload(size) {
+            if (!currentImage) return alert("Please upload an image first!");
+
+            // Create a hidden canvas
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+
+            // Draw and scale the image onto the canvas 
+            // Note: This stretches the image to be a perfect square. 
+            // For best results, use a square image to start with.
+            ctx.drawImage(currentImage, 0, 0, size, size);
+
+            // Convert canvas to a PNG Blob
+            canvas.toBlob(function(blob) {
+                // Create a download link
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `icon-${size}.png`; // Set correct filename
+                
+                // Append, click, and remove the link
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                
+                // Clean up memory
+                URL.revokeObjectURL(url);
+            }, 'image/png');
+        }
+
+        // Function to download both sizes at once
+        function downloadBoth() {
+            resizeAndDownload(192);
+            // Slight delay so the browser processes both downloads correctly
+            setTimeout(() => {
+                resizeAndDownload(512);
+            }, 300);
+        }
+    </script>
+</body>
+</html>
