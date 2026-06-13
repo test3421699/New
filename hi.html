@@ -1,14 +1,823 @@
-<!DOCTYPE html>
-<html>
+<!DOCTYPE html>  <html lang="en">  
+<head>  
+    <meta charset="UTF-8">  
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">  
+    <title>PDF Merger Pro</title>  <!-- PWA Minimal Inline Manifest -->  
+<link rel="manifest" id="manifest-link" href="">  
+<meta name="theme-color" content="#2563eb">  
+<meta name="apple-mobile-web-app-capable" content="yes">  
 
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title></title>
-</head>
+<!-- Dependencies: PDF.js and pdf-lib -->  
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>  
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>  
 
-<body>
-  
-</body>
+<style>  
+    :root {  
+        --primary: #2563eb; --primary-hover: #1d4ed8;  
+        --bg-body: #f1f5f9; --bg-surface: #ffffff; --bg-panel: #f8fafc;  
+        --text-main: #0f172a; --text-muted: #64748b;  
+        --border: #e2e8f0; --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);  
+        --danger: #ef4444; --danger-hover: #dc2626;  
+        --radius: 8px; --thumb-size: 150px;  
+    }  
 
-</html>
+    [data-theme="dark"] {  
+        --bg-body: #0f172a; --bg-surface: #1e293b; --bg-panel: #334155;  
+        --text-main: #f8fafc; --text-muted: #cbd5e1;  
+        --border: #475569; --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);  
+    }  
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }  
+    body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg-body); color: var(--text-main); height: 100vh; overflow: hidden; display: flex; flex-direction: column; transition: background 0.3s, color 0.3s; }  
+      
+    /* Navbar */  
+    .navbar { height: 60px; background: var(--bg-surface); padding: 0 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); z-index: 10; box-shadow: var(--shadow); }  
+    .logo { font-size: 1.25rem; font-weight: bold; display: flex; align-items: center; gap: 8px; color: var(--primary); }  
+    .nav-actions { display: flex; gap: 12px; }  
+      
+    /* Main Layout */  
+    .main-container { display: flex; flex: 1; overflow: hidden; position: relative; }  
+      
+    /* Sidebar Controls */  
+    .sidebar { width: 360px; background: var(--bg-surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; z-index: 5; }  
+    .sidebar-content { padding: 20px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 24px; }  
+      
+    /* Sections */  
+    .section-title { font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 600; margin-bottom: 12px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }  
+    .control-group { margin-bottom: 16px; }  
+    .control-row { display: flex; gap: 12px; }  
+    .control-row > div { flex: 1; }  
+    label { display: block; font-size: 0.85rem; margin-bottom: 6px; color: var(--text-main); }  
+    input[type="number"], input[type="text"], select { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-body); color: var(--text-main); font-size: 0.9rem; outline: none; transition: border-color 0.2s; }  
+    input:focus, select:focus { border-color: var(--primary); }  
+    input[type="range"] { width: 100%; accent-color: var(--primary); }  
+    .range-val { font-size: 0.8rem; color: var(--text-muted); float: right; }  
+
+    /* Upload Area */  
+    .dropzone { border: 2px dashed var(--primary); border-radius: var(--radius); padding: 30px 20px; text-align: center; cursor: pointer; background: rgba(37, 99, 235, 0.05); transition: background 0.2s; position: relative; }  
+    .dropzone:hover, .dropzone.dragover { background: rgba(37, 99, 235, 0.1); }  
+    .dropzone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }  
+    .dropzone svg { width: 40px; height: 40px; fill: var(--primary); margin-bottom: 10px; }  
+
+    /* File List */  
+    .file-list { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }  
+    .file-item { background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; display: flex; flex-direction: column; gap: 8px; cursor: grab; }  
+    .file-item:active { cursor: grabbing; }  
+    .file-item-header { display: flex; justify-content: space-between; align-items: center; }  
+    .file-info { font-size: 0.9rem; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }  
+    .file-meta { font-size: 0.75rem; color: var(--text-muted); }  
+    .file-actions button { background: transparent; border: none; cursor: pointer; padding: 4px; border-radius: 4px; color: var(--text-muted); }  
+    .file-actions button:hover { background: var(--border); color: var(--text-main); }  
+    .file-actions .btn-remove:hover { color: var(--danger); background: rgba(239, 68, 68, 0.1); }  
+      
+    /* Buttons */  
+    .btn { padding: 10px 16px; border-radius: var(--radius); border: none; font-size: 0.95rem; cursor: pointer; font-weight: 500; transition: background 0.2s, transform 0.1s; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }  
+    .btn:active { transform: scale(0.98); }  
+    .btn-primary { background: var(--primary); color: white; width: 100%; font-size: 1.1rem; padding: 14px; }  
+    .btn-primary:hover { background: var(--primary-hover); }  
+    .btn-primary:disabled { background: var(--border); cursor: not-allowed; transform: none; }  
+    .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-main); }  
+    .btn-outline:hover { background: var(--bg-panel); }  
+
+    /* Workspace */  
+    .workspace { flex: 1; display: flex; flex-direction: column; background: var(--bg-body); overflow: hidden; position: relative; }  
+    .tabs { display: flex; gap: 10px; padding: 15px 20px; border-bottom: 1px solid var(--border); background: var(--bg-surface); }  
+    .tab { padding: 8px 16px; cursor: pointer; font-weight: 500; border-radius: 20px; background: transparent; border: 1px solid transparent; color: var(--text-muted); }  
+    .tab.active { background: var(--primary); color: white; }  
+      
+    .workspace-content { flex: 1; overflow: auto; padding: 20px; position: relative; display: none; }  
+    .workspace-content.active { display: flex; flex-direction: column; }  
+
+    /* Layout Preview Canvas */  
+    .canvas-wrapper { display: flex; align-items: center; justify-content: center; flex: 1; min-height: 400px; }  
+    canvas#layoutPreview { box-shadow: 0 10px 25px -5px rgba(0,0,0,0.2); background: white; max-width: 100%; max-height: 100%; object-fit: contain; }  
+
+    /* Thumbnails Grid */  
+    .view-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: var(--bg-surface); padding: 10px 15px; border-radius: var(--radius); box-shadow: var(--shadow); }  
+    .thumbnails-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--thumb-size), 1fr)); gap: 20px; padding-bottom: 40px; }  
+    .thumbnails-grid.list-view { grid-template-columns: 1fr; }  
+    .thumb-item { background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; display: flex; flex-direction: column; align-items: center; gap: 10px; box-shadow: var(--shadow); transition: transform 0.2s; }  
+    .list-view .thumb-item { flex-direction: row; justify-content: flex-start; }  
+    .thumb-item:hover { transform: translateY(-3px); border-color: var(--primary); }  
+    .thumb-img-wrapper { width: 100%; aspect-ratio: 1 / 1.414; background: #e2e8f0; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; }  
+    .list-view .thumb-img-wrapper { width: 100px; }  
+    .thumb-img-wrapper canvas { width: 100%; height: 100%; object-fit: cover; }  
+    .thumb-info { text-align: center; font-size: 0.8rem; width: 100%; }  
+    .list-view .thumb-info { text-align: left; }  
+    .thumb-title { font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }  
+
+    /* Loader */  
+    .spinner { border: 4px solid var(--border); border-top: 4px solid var(--primary); border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }  
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }  
+
+    /* Fullscreen Overlay Progress */  
+    .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 100; display: none; align-items: center; justify-content: center; flex-direction: column; color: white; }  
+    .overlay.active { display: flex; }  
+    .progress-box { width: 400px; max-width: 90%; background: var(--bg-surface); padding: 30px; border-radius: var(--radius); text-align: center; color: var(--text-main); }  
+    .progress-bar-bg { width: 100%; height: 10px; background: var(--border); border-radius: 5px; margin: 20px 0; overflow: hidden; }  
+    .progress-bar-fill { height: 100%; background: var(--primary); width: 0%; transition: width 0.2s; }  
+
+    /* Mobile Adjustments */  
+    @media (max-width: 768px) {  
+        .main-container { flex-direction: column; }  
+        .sidebar { width: 100%; height: 50vh; border-right: none; border-bottom: 1px solid var(--border); }  
+        .workspace { height: 50vh; }  
+    }  
+</style>
+
+</head>  
+<body>  <!-- PWA Setup via Script Injection -->  
+<script>  
+    const manifest = {  
+        name: "PDF Merger Pro", short_name: "PDFPro", display: "standalone", background_color: "#f1f5f9", theme_color: "#2563eb",  
+        icons: [{"src": "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%232563eb'/><text x='50' y='65' font-size='50' font-family='sans-serif' text-anchor='middle' fill='white'>P</text></svg>", "sizes": "192x192", "type": "image/svg+xml"}]  
+    };  
+    document.getElementById('manifest-link').href = 'data:application/manifest+json;charset=utf-8,' + encodeURIComponent(JSON.stringify(manifest));  
+    const swBlob = new Blob(["self.addEventListener('fetch', e => {});"], {type: 'application/javascript'});  
+    if('serviceWorker' in navigator) navigator.serviceWorker.register(URL.createObjectURL(swBlob));  
+</script>  
+
+<!-- Navbar -->  
+<nav class="navbar">  
+    <div class="logo">  
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V8L14 2M13 9V3.5L18.5 9H13Z"/></svg>  
+        PDF Merger Pro  
+    </div>  
+    <div class="nav-actions">  
+        <button class="btn btn-outline" id="btnPresets" title="Save/Load Export Settings">  
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> Presets  
+        </button>  
+        <button class="btn btn-outline" id="btnThemeToggle" title="Toggle Dark Mode">  
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>  
+        </button>  
+    </div>  
+</nav>  
+
+<div class="main-container">  
+      
+    <!-- Sidebar -->  
+    <aside class="sidebar">  
+        <div class="sidebar-content">  
+              
+            <!-- Upload Section -->  
+            <div>  
+                <div class="section-title">1. Files</div>  
+                <label class="dropzone" id="dropzone">  
+                    <svg viewBox="0 0 24 24"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4C9.11 4 6.6 5.64 5.35 8.04C2.34 8.36 0 10.91 0 14C0 17.31 2.69 20 6 20H19C21.76 20 24 17.76 24 15C24 12.36 21.95 10.22 19.35 10.04ZM14 13V17H10V13H7L12 8L17 13H14Z"/></svg><br>  
+                    <strong>Click or Drag PDFs here</strong>  
+                    <input type="file" id="fileInput" multiple accept=".pdf">  
+                </label>  
+                <div class="file-list" id="fileList"></div>  
+            </div>  
+
+            <!-- A4 Output Settings -->  
+            <div>  
+                <div class="section-title">2. A4 Layout Settings</div>  
+                <div class="control-row">  
+                    <div class="control-group">  
+                        <label>Orientation</label>  
+                        <select id="setOrientation">  
+                            <option value="portrait">Portrait</option>  
+                            <option value="landscape">Landscape</option>  
+                        </select>  
+                    </div>  
+                    <div class="control-group">  
+                        <label>Pages / Sheet</label>  
+                        <select id="setPagesPerSheet">  
+                            <option value="1">1</option><option value="2">2</option>  
+                            <option value="4">4</option><option value="6">6</option>  
+                            <option value="8">8</option><option value="9">9</option>  
+                            <option value="12">12</option><option value="16">16</option>  
+                        </select>  
+                    </div>  
+                </div>  
+                <div class="control-group">  
+                    <label>Fit Mode</label>  
+                    <select id="setFitMode">  
+                        <option value="contain">Contain (Keep aspect, fit inside)</option>  
+                        <option value="cover">Cover (Fill cell, may clip)</option>  
+                        <option value="fitWidth">Fit Width</option>  
+                        <option value="fitHeight">Fit Height</option>  
+                    </select>  
+                </div>  
+            </div>  
+
+            <!-- Margins -->  
+            <div>  
+                <div class="section-title">3. Margins (mm)</div>  
+                <div class="control-row">  
+                    <div class="control-group">  
+                        <label>Top <span class="range-val" id="valMt">10</span></label>  
+                        <input type="range" id="setMt" min="0" max="50" value="10">  
+                    </div>  
+                    <div class="control-group">  
+                        <label>Bottom <span class="range-val" id="valMb">10</span></label>  
+                        <input type="range" id="setMb" min="0" max="50" value="10">  
+                    </div>  
+                </div>  
+                <div class="control-row">  
+                    <div class="control-group">  
+                        <label>Left <span class="range-val" id="valMl">10</span></label>  
+                        <input type="range" id="setMl" min="0" max="50" value="10">  
+                    </div>  
+                    <div class="control-group">  
+                        <label>Right <span class="range-val" id="valMr">10</span></label>  
+                        <input type="range" id="setMr" min="0" max="50" value="10">  
+                    </div>  
+                </div>  
+            </div>  
+
+            <!-- Spacing -->  
+            <div>  
+                <div class="section-title">4. Spacing (mm)</div>  
+                <div class="control-row">  
+                    <div class="control-group">  
+                        <label>Horizontal <span class="range-val" id="valGh">5</span></label>  
+                        <input type="range" id="setGh" min="0" max="50" value="5">  
+                    </div>  
+                    <div class="control-group">  
+                        <label>Vertical <span class="range-val" id="valGv">5</span></label>  
+                        <input type="range" id="setGv" min="0" max="50" value="5">  
+                    </div>  
+                </div>  
+            </div>  
+
+        </div>  
+          
+        <!-- Generate Action -->  
+        <div style="padding: 15px; border-top: 1px solid var(--border); background: var(--bg-surface);">  
+            <button class="btn btn-primary" id="btnGenerate" disabled>  
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16c0 1.1.9 2 2 2h12a2 2 0 0 0 2-2V8l-6-6z"/><path d="M14 3v5h5M12 18v-6M9 15h6"/></svg>  
+                Generate PDF  
+            </button>  
+        </div>  
+    </aside>  
+
+    <!-- Main Workspace -->  
+    <main class="workspace">  
+        <div class="tabs">  
+            <button class="tab active" data-target="viewLayout">Live Layout Preview</button>  
+            <button class="tab" data-target="viewThumbs">Pages Preview</button>  
+        </div>  
+
+        <div id="viewLayout" class="workspace-content active">  
+            <div class="canvas-wrapper">  
+                <canvas id="layoutPreview" width="800" height="1131"></canvas> <!-- A4 Proportions -->  
+            </div>  
+        </div>  
+
+        <div id="viewThumbs" class="workspace-content">  
+            <div class="view-controls">  
+                <div style="display: flex; align-items: center; gap: 10px;">  
+                    <label style="margin:0;">Zoom:</label>  
+                    <input type="range" id="thumbZoom" min="80" max="300" value="150" style="width: 150px;">  
+                </div>  
+                <div>  
+                    <button class="btn btn-outline" id="btnGridList" title="Toggle Grid/List">Toggle View</button>  
+                </div>  
+            </div>  
+            <div class="thumbnails-grid" id="thumbnailsContainer">  
+                <!-- Virtualized thumbnails injected here -->  
+                <div style="text-align: center; width: 100%; color: var(--text-muted); padding: 50px;">  
+                    Upload PDFs to preview pages.  
+                </div>  
+            </div>  
+        </div>  
+    </main>  
+</div>  
+
+<!-- Progress Overlay -->  
+<div class="overlay" id="progressOverlay">  
+    <div class="progress-box">  
+        <h2 id="progressStatus">Processing...</h2>  
+        <div class="progress-bar-bg">  
+            <div class="progress-bar-fill" id="progressBar"></div>  
+        </div>  
+        <p id="progressDetail">0%</p>  
+    </div>  
+</div>  
+
+<script type="module">  
+    // ==========================================  
+    // INITIALIZATION & SETUP  
+    // ==========================================  
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';  
+    const { PDFDocument, PageSizes } = window.PDFLib;  
+
+    // Constants  
+    const A4_PORTRAIT = { w: 210, h: 297 };  
+    const A4_LANDSCAPE = { w: 297, h: 210 };  
+    const MM_TO_PTS = 72 / 25.4;  
+
+    // State  
+    const state = {  
+        files: [], // { id, name, size, numPages, arrayBuffer, pdfDoc, rangeStr: 'All' }  
+        layout: {  
+            orientation: 'portrait', pagesPerSheet: 1, fitMode: 'contain',  
+            mt: 10, mb: 10, ml: 10, mr: 10, gh: 5, gv: 5  
+        },  
+        theme: localStorage.getItem('theme') || 'light'  
+    };  
+
+    // DOM Elements  
+    const els = {  
+        fileInput: document.getElementById('fileInput'),  
+        dropzone: document.getElementById('dropzone'),  
+        fileList: document.getElementById('fileList'),  
+        btnGenerate: document.getElementById('btnGenerate'),  
+        layoutPreview: document.getElementById('layoutPreview'),  
+        thumbnailsContainer: document.getElementById('thumbnailsContainer'),  
+        thumbZoom: document.getElementById('thumbZoom'),  
+        btnGridList: document.getElementById('btnGridList'),  
+        tabs: document.querySelectorAll('.tab'),  
+        contents: document.querySelectorAll('.workspace-content'),  
+        progressOverlay: document.getElementById('progressOverlay'),  
+        progressStatus: document.getElementById('progressStatus'),  
+        progressBar: document.getElementById('progressBar'),  
+        progressDetail: document.getElementById('progressDetail'),  
+        btnThemeToggle: document.getElementById('btnThemeToggle'),  
+        btnPresets: document.getElementById('btnPresets')  
+    };  
+
+    // Apply Theme  
+    const applyTheme = () => {  
+        document.body.setAttribute('data-theme', state.theme);  
+    };  
+    applyTheme();  
+
+    els.btnThemeToggle.addEventListener('click', () => {  
+        state.theme = state.theme === 'light' ? 'dark' : 'light';  
+        localStorage.setItem('theme', state.theme);  
+        applyTheme();  
+        drawLayoutPreview();  
+    });  
+
+    // ==========================================  
+    // SETTINGS & BINDINGS  
+    // ==========================================  
+    const bindInput = (id, prop, isNum = false) => {  
+        const el = document.getElementById(id);  
+        const valEl = document.getElementById(`val${id.replace('set','')}`);  
+          
+        // Load preset if exists  
+        const saved = localStorage.getItem('pdf_presets');  
+        if(saved) {  
+            try { state.layout = { ...state.layout, ...JSON.parse(saved) }; } catch(e){}  
+        }  
+
+        el.value = state.layout[prop];  
+        if(valEl) valEl.innerText = el.value;  
+
+        el.addEventListener('input', (e) => {  
+            state.layout[prop] = isNum ? Number(e.target.value) : e.target.value;  
+            if(valEl) valEl.innerText = e.target.value;  
+            drawLayoutPreview();  
+        });  
+    };  
+
+    bindInput('setOrientation', 'orientation');  
+    bindInput('setPagesPerSheet', 'pagesPerSheet', true);  
+    bindInput('setFitMode', 'fitMode');  
+    bindInput('setMt', 'mt', true); bindInput('setMb', 'mb', true);  
+    bindInput('setMl', 'ml', true); bindInput('setMr', 'mr', true);  
+    bindInput('setGh', 'gh', true); bindInput('setGv', 'gv', true);  
+
+    els.btnPresets.addEventListener('click', () => {  
+        localStorage.setItem('pdf_presets', JSON.stringify(state.layout));  
+        alert('Current layout settings saved as preset!');  
+    });  
+
+    // ==========================================  
+    // FILE HANDLING  
+    // ==========================================  
+    const formatSize = (bytes) => (bytes / (1024*1024)).toFixed(2) + ' MB';  
+
+    const handleFiles = async (files) => {  
+        els.btnGenerate.disabled = true;  
+        for(let f of files) {  
+            if(f.type !== 'application/pdf') continue;  
+              
+            const id = 'f_' + Math.random().toString(36).substr(2, 9);  
+              
+            // FIX: Use a Blob URL for PDF.js so it doesn't steal the ArrayBuffer  
+            const fileUrl = URL.createObjectURL(f);  
+              
+            // Load info using PDF.js  
+            const pdfDoc = await pdfjsLib.getDocument(fileUrl).promise;  
+              
+            state.files.push({  
+                id, name: f.name, size: f.size, numPages: pdfDoc.numPages,  
+                file: f, // FIX: Store the raw File object instead of ArrayBuffer  
+                pdfDoc, rangeStr: ''  
+            });  
+        }  
+        renderFileList();  
+        buildThumbnails();  
+        els.btnGenerate.disabled = state.files.length === 0;  
+    };  
+
+    els.fileInput.addEventListener('change', e => handleFiles(e.target.files));  
+    els.dropzone.addEventListener('dragover', e => { e.preventDefault(); els.dropzone.classList.add('dragover'); });  
+    els.dropzone.addEventListener('dragleave', () => els.dropzone.classList.remove('dragover'));  
+    els.dropzone.addEventListener('drop', e => {  
+        e.preventDefault(); els.dropzone.classList.remove('dragover');  
+        handleFiles(e.dataTransfer.files);  
+    });  
+
+    // ==========================================  
+    // UI RENDERING & DRAG REORDER  
+    // ==========================================  
+    const renderFileList = () => {  
+        els.fileList.innerHTML = '';  
+        state.files.forEach((file, index) => {  
+            const el = document.createElement('div');  
+            el.className = 'file-item';  
+            el.draggable = true;  
+            el.dataset.index = index;  
+              
+            el.innerHTML = `  
+                <div class="file-item-header">  
+                    <div class="file-info" title="${file.name}">  
+                        <strong>${file.name}</strong><br>  
+                        <span class="file-meta">${file.numPages} Pages | ${formatSize(file.size)}</span>  
+                    </div>  
+                    <div class="file-actions">  
+                        <button title="Move Up" onclick="moveFile(${index}, -1)">▲</button>  
+                        <button title="Move Down" onclick="moveFile(${index}, 1)">▼</button>  
+                        <button class="btn-remove" title="Remove" onclick="removeFile('${file.id}')">  
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>  
+                        </button>  
+                    </div>  
+                </div>  
+                <div>  
+                    <label style="display:inline;font-size:0.8rem;">Pages:</label>  
+                    <input type="text" placeholder="e.g. 1-5, 8, 11-13 (Leave blank for All)" value="${file.rangeStr}"   
+                        onchange="updateRange('${file.id}', this.value)" style="width: calc(100% - 50px); padding:4px;">  
+                </div>  
+            `;  
+              
+            // Drag and Drop reordering logic  
+            el.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', index); });  
+            el.addEventListener('dragover', e => e.preventDefault());  
+            el.addEventListener('drop', e => {  
+                e.preventDefault();  
+                const fromIdx = parseInt(e.dataTransfer.getData('text/plain'));  
+                const toIdx = index;  
+                if(fromIdx !== toIdx) {  
+                    const temp = state.files.splice(fromIdx, 1)[0];  
+                    state.files.splice(toIdx, 0, temp);  
+                    renderFileList();  
+                    buildThumbnails();  
+                }  
+            });  
+
+            els.fileList.appendChild(el);  
+        });  
+    };  
+
+    window.removeFile = (id) => {  
+        state.files = state.files.filter(f => f.id !== id);  
+        renderFileList();  
+        buildThumbnails();  
+        els.btnGenerate.disabled = state.files.length === 0;  
+    };  
+
+    window.moveFile = (idx, dir) => {  
+        if(idx + dir < 0 || idx + dir >= state.files.length) return;  
+        const temp = state.files[idx];  
+        state.files[idx] = state.files[idx+dir];  
+        state.files[idx+dir] = temp;  
+        renderFileList();  
+        buildThumbnails();  
+    };  
+
+    window.updateRange = (id, val) => {  
+        const f = state.files.find(f => f.id === id);  
+        if(f) f.rangeStr = val;  
+        buildThumbnails();  
+    };  
+
+    // ==========================================  
+    // THUMBNAILS & VIRTUALIZATION  
+    // ==========================================  
+    els.thumbZoom.addEventListener('input', e => {  
+        document.documentElement.style.setProperty('--thumb-size', e.target.value + 'px');  
+    });  
+
+    els.btnGridList.addEventListener('click', () => {  
+        els.thumbnailsContainer.classList.toggle('list-view');  
+    });  
+
+    // Parse Custom Range  
+    const parseRange = (rangeStr, maxPages) => {  
+        if (!rangeStr || !rangeStr.trim() || rangeStr.trim().toLowerCase() === 'all') {  
+            return Array.from({length: maxPages}, (_, i) => i);  
+        }  
+        const indices = new Set();  
+        const parts = rangeStr.split(',');  
+        for (let p of parts) {  
+            p = p.trim();  
+            if (p.includes('-')) {  
+                const [start, end] = p.split('-').map(Number);  
+                if (start > 0 && end >= start) {  
+                    for (let i = start; i <= end; i++) {  
+                        if (i <= maxPages) indices.add(i - 1);  
+                    }  
+                }  
+            } else {  
+                const val = Number(p);  
+                if (val > 0 && val <= maxPages) indices.add(val - 1);  
+            }  
+        }  
+        return Array.from(indices).sort((a,b)=>a-b);  
+    };  
+
+    // Intersection Observer for Lazy Rendering  
+    const thumbObserver = new IntersectionObserver((entries) => {  
+        entries.forEach(entry => {  
+            if (entry.isIntersecting) {  
+                const el = entry.target;  
+                if (!el.dataset.loaded) {  
+                    el.dataset.loaded = "true";  
+                    renderSingleThumbnail(el);  
+                }  
+            }  
+        });  
+    }, { root: els.thumbnailsContainer, rootMargin: "100px" });  
+
+    const buildThumbnails = () => {  
+        els.thumbnailsContainer.innerHTML = '';  
+        if(state.files.length === 0) {  
+            els.thumbnailsContainer.innerHTML = '<div style="text-align:center;width:100%;padding:50px;">Upload PDFs to preview pages.</div>';  
+            return;  
+        }  
+
+        state.files.forEach(file => {  
+            const pagesToRender = parseRange(file.rangeStr, file.numPages);  
+            pagesToRender.forEach(pageIndex => {  
+                const thumb = document.createElement('div');  
+                thumb.className = 'thumb-item';  
+                thumb.dataset.fileId = file.id;  
+                thumb.dataset.pageIndex = pageIndex + 1; // 1-based for UI  
+                  
+                thumb.innerHTML = `  
+                    <div class="thumb-img-wrapper" id="img_${file.id}_${pageIndex}">  
+                        <div class="spinner"></div>  
+                    </div>  
+                    <div class="thumb-info">  
+                        <div class="thumb-title" title="${file.name}">${file.name}</div>  
+                        <div style="color:var(--text-muted);">Page ${pageIndex + 1}</div>  
+                    </div>  
+                `;  
+                els.thumbnailsContainer.appendChild(thumb);  
+                thumbObserver.observe(thumb);  
+            });  
+        });  
+    };  
+
+    const renderSingleThumbnail = async (thumbEl) => {  
+        const { fileId, pageIndex } = thumbEl.dataset;  
+        const file = state.files.find(f => f.id === fileId);  
+        if(!file) return;  
+
+        try {  
+            const page = await file.pdfDoc.getPage(parseInt(pageIndex));  
+            const viewport = page.getViewport({ scale: 1.0 });  
+            // Target width ~ 200px for thumbnail to save memory  
+            const scale = 200 / viewport.width;   
+            const scaledViewport = page.getViewport({ scale });  
+
+            const canvas = document.createElement('canvas');  
+            canvas.width = scaledViewport.width;  
+            canvas.height = scaledViewport.height;  
+            const ctx = canvas.getContext('2d', { alpha: false });  
+
+            await page.render({ canvasContext: ctx, viewport: scaledViewport }).promise;  
+              
+            const wrapper = document.getElementById(`img_${fileId}_${parseInt(pageIndex)-1}`);  
+            if(wrapper) {  
+                wrapper.innerHTML = '';  
+                wrapper.appendChild(canvas);  
+            }  
+        } catch (e) {  
+            console.error("Error rendering thumbnail", e);  
+        }  
+    };  
+
+    // ==========================================  
+    // LAYOUT CALCULATION & CANVAS PREVIEW  
+    // ==========================================  
+    const getLayoutConfig = () => {  
+        const paper = state.layout.orientation === 'portrait' ? A4_PORTRAIT : A4_LANDSCAPE;  
+        const { pagesPerSheet, mt, mb, ml, mr, gh, gv } = state.layout;  
+          
+        // Map Pages Per Sheet to Columns x Rows  
+        const isPort = state.layout.orientation === 'portrait';  
+        const grids = {  
+            1: [1, 1], 2: isPort ? [1, 2] : [2, 1], 4: [2, 2],  
+            6: isPort ? [2, 3] : [3, 2], 8: isPort ? [2, 4] : [4, 2],  
+            9: [3, 3], 12: isPort ? [3, 4] : [4, 3], 16: [4, 4]  
+        };  
+        const [cols, rows] = grids[pagesPerSheet] || [1,1];  
+
+        const usableW = paper.w - ml - mr;  
+        const usableH = paper.h - mt - mb;  
+          
+        const cellW = (usableW - (cols - 1) * gh) / cols;  
+        const cellH = (usableH - (rows - 1) * gv) / rows;  
+
+        return { paper, cols, rows, cellW, cellH, mt, mb, ml, mr, gh, gv };  
+    };  
+
+    const drawLayoutPreview = () => {  
+        const ctx = els.layoutPreview.getContext('2d');  
+        const { paper, cols, rows, cellW, cellH, mt, ml, gh, gv } = getLayoutConfig();  
+          
+        // Setup High-Res Canvas  
+        const scale = 4; // Render scale for sharpness  
+        els.layoutPreview.width = paper.w * scale;  
+        els.layoutPreview.height = paper.h * scale;  
+          
+        ctx.scale(scale, scale);  
+          
+        // Draw Paper Background  
+        ctx.fillStyle = '#ffffff';  
+        ctx.fillRect(0, 0, paper.w, paper.h);  
+          
+        // Draw Margins Box (Dashed)  
+        ctx.strokeStyle = '#ef4444';  
+        ctx.lineWidth = 0.5;  
+        ctx.setLineDash([2, 2]);  
+        ctx.strokeRect(ml, mt, paper.w - ml - state.layout.mr, paper.h - mt - state.layout.mb);  
+
+        // Draw Cells  
+        ctx.setLineDash([]);  
+        ctx.fillStyle = 'rgba(37, 99, 235, 0.1)';  
+        ctx.strokeStyle = '#2563eb';  
+        ctx.lineWidth = 0.5;  
+        ctx.font = '6px sans-serif';  
+        ctx.textAlign = 'center';  
+        ctx.textBaseline = 'middle';  
+
+        let count = 1;  
+        for(let r = 0; r < rows; r++) {  
+            for(let c = 0; c < cols; c++) {  
+                const x = ml + c * (cellW + gh);  
+                const y = mt + r * (cellH + gv);  
+                  
+                if(cellW > 0 && cellH > 0) {  
+                    ctx.fillRect(x, y, cellW, cellH);  
+                    ctx.strokeRect(x, y, cellW, cellH);  
+                      
+                    ctx.fillStyle = '#1e293b';  
+                    ctx.fillText(`Page ${count++}`, x + cellW/2, y + cellH/2);  
+                    ctx.fillStyle = 'rgba(37, 99, 235, 0.1)';  
+                }  
+            }  
+        }  
+    };  
+
+    // Initial Draw  
+    drawLayoutPreview();  
+
+    // Tabs Logic  
+    els.tabs.forEach(tab => {  
+        tab.addEventListener('click', () => {  
+            els.tabs.forEach(t => t.classList.remove('active'));  
+            els.contents.forEach(c => c.classList.remove('active'));  
+            tab.classList.add('active');  
+            document.getElementById(tab.dataset.target).classList.add('active');  
+        });  
+    });  
+
+    // ==========================================  
+    // PDF GENERATION (pdf-lib)  
+    // ==========================================  
+    const updateProgress = (pct, status, detail) => {  
+        els.progressBar.style.width = `${pct}%`;  
+        if(status) els.progressStatus.innerText = status;  
+        if(detail) els.progressDetail.innerText = detail;  
+    };  
+
+    const yieldMain = () => new Promise(r => setTimeout(r, 10));  
+
+    els.btnGenerate.addEventListener('click', async () => {  
+        els.progressOverlay.classList.add('active');  
+        updateProgress(0, 'Initializing Engine...', 'Preparing documents');  
+        await yieldMain();  
+
+        try {  
+            const finalPdf = await PDFDocument.create();  
+            const config = getLayoutConfig();  
+            const { paper, cols, rows, cellW, cellH, ml, mt, gh, gv } = config;  
+            const { fitMode } = state.layout;  
+            const pps = state.layout.pagesPerSheet;  
+
+            // 1. Gather all pages across all files based on range  
+            const embeddedPages = [];  
+            let totalSrcPages = 0;  
+
+            for (let i = 0; i < state.files.length; i++) {
+
+const f = state.files[i];
+updateProgress(10, 'Loading PDFs...', Processing ${f.name});
+await yieldMain();
+
+// FIX: Read the ArrayBuffer fresh right when pdf-lib needs it
+const arrayBuffer = await f.file.arrayBuffer();
+const srcDoc = await PDFDocument.load(arrayBuffer);
+const indices = parseRange(f.rangeStr, f.numPages);
+
+const copiedPages = await finalPdf.copyPages(srcDoc, indices);
+embeddedPages.push(...copiedPages);
+totalSrcPages += copiedPages.length;
+}
+
+// 2. Generate N-up Pages  
+            const totalOutPages = Math.ceil(embeddedPages.length / pps);  
+              
+            for(let outIdx = 0; outIdx < totalOutPages; outIdx++) {  
+                // Update progress  
+                const pct = 20 + Math.floor((outIdx / totalOutPages) * 60);  
+                updateProgress(pct, 'Generating PDF Layout...', `Creating Output Page ${outIdx + 1} of ${totalOutPages}`);  
+                await yieldMain();  
+
+                // Create new A4 page  
+                const page = finalPdf.addPage([paper.w * MM_TO_PTS, paper.h * MM_TO_PTS]);  
+                  
+                // Place items in grid  
+                for(let i = 0; i < pps; i++) {  
+                    const srcIdx = outIdx * pps + i;  
+                    if(srcIdx >= embeddedPages.length) break;  
+
+                    const embPage = await finalPdf.embedPage(embeddedPages[srcIdx]);  
+                    const embDims = embPage.scale(1.0); // original width/height in pts  
+                      
+                    const r = Math.floor(i / cols);  
+                    const c = i % cols;  
+
+                    // Coordinates in MM from Top-Left  
+                    const cellX_mm = ml + c * (cellW + gh);  
+                    const cellY_mm = mt + r * (cellH + gv);  
+
+                    // Convert cell bounds to Points  
+                    const cw_pts = cellW * MM_TO_PTS;  
+                    const ch_pts = cellH * MM_TO_PTS;  
+                      
+                    // PDF Origin is Bottom-Left, need to convert Y  
+                    const pdfX = cellX_mm * MM_TO_PTS;  
+                    const pdfY = (paper.h - (cellY_mm + cellH)) * MM_TO_PTS;   
+
+                    // Calculate scale based on fitMode  
+                    const sx = cw_pts / embDims.width;  
+                    const sy = ch_pts / embDims.height;  
+                    let scale = 1;  
+
+                    if (fitMode === 'contain') scale = Math.min(sx, sy);  
+                    else if (fitMode === 'cover') scale = Math.max(sx, sy);  
+                    else if (fitMode === 'fitWidth') scale = sx;  
+                    else if (fitMode === 'fitHeight') scale = sy;  
+
+                    const drawW = embDims.width * scale;  
+                    const drawH = embDims.height * scale;  
+
+                    // Center in cell  
+                    const drawX = pdfX + (cw_pts - drawW) / 2;  
+                    const drawY = pdfY + (ch_pts - drawH) / 2;  
+
+                    // Draw with clipping to prevent overflow (especially in cover mode)  
+                    // Draw the scaled page into the layout cell  
+                    page.drawPage(embPage, {  
+                        x: drawX, y: drawY, width: drawW, height: drawH  
+                    });  
+                }  
+            }  
+
+            updateProgress(90, 'Finalizing...', 'Saving bytes...');  
+            await yieldMain();  
+
+            // 3. Save and Download  
+            const pdfBytes = await finalPdf.save();  
+            const blob = new Blob([pdfBytes], { type: 'application/pdf' });  
+            const url = URL.createObjectURL(blob);  
+              
+            const a = document.createElement('a');  
+            a.href = url;  
+            a.download = 'merged_document.pdf';  
+            a.click();  
+            URL.revokeObjectURL(url);  
+
+            updateProgress(100, 'Done!', 'Download started.');  
+            setTimeout(() => els.progressOverlay.classList.remove('active'), 1500);  
+
+        } catch (err) {  
+            console.error(err);  
+            alert('An error occurred during generation: ' + err.message);  
+            els.progressOverlay.classList.remove('active');  
+        }  
+    });  
+
+</script>
+
+</body>  
+</html>  
