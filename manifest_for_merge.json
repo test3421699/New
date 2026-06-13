@@ -1,7 +1,7 @@
 {
   "name": "PDF Merger Pro",
   "short_name": "PDFPro",
-  "start_url": "./",
+  "start_url": "./merge.html",
   "display": "standalone",
   "background_color": "#f1f5f9",
   "theme_color": "#2563eb",

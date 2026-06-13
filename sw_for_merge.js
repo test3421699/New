@@ -3,7 +3,7 @@ const CACHE_NAME = 'pdf-pro-cache-v1';
 // URLs to cache for offline capabilities
 const urlsToCache = [
   './',
-  './index.html',
+  './merge.html',
   './manifest.json',
   'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js',
