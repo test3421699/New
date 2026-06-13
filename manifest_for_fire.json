@@ -1,6 +1,6 @@
 {
   "short_name": "FIREWORKS SIMULATOR",
-  "name": "FIREWORKS SIMULATOR,
+  "name": "FIREWORKS SIMULATOR",
   "icons": [
     {
       "src": "icon-192(1).png",
@@ -13,7 +13,7 @@
       "sizes": "512x512"
     }
   ],
-  "start_url": "/fire.html",
+  "start_url": "./fire.html",
   "background_color": "#ffffff",
   "theme_color": "#1976d2",
   "display": "standalone",
