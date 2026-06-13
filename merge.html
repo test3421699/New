@@ -4,8 +4,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">  
     <title>PDF Merger Pro</title>  <!-- PWA Minimal Inline Manifest -->  
 <!-- Proper Manifest Link -->
-<link rel="manifest" href="manifest_for_merge.json">
-<meta name="theme-color" content="#2563eb">  
+
 <meta name="apple-mobile-web-app-capable" content="yes">  
 
 <!-- Dependencies: PDF.js and pdf-lib -->  
@@ -812,18 +811,6 @@ totalSrcPages += copiedPages.length;
 
 </script>
 <!-- Service Worker Registration -->
-<script>
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            navigator.serviceWorker.register('sw_for_merge.js')
-                .then(registration => {
-                    console.log('ServiceWorker registered successfully with scope: ', registration.scope);
-                })
-                .catch(error => {
-                    console.log('ServiceWorker registration failed: ', error);
-                });
-        });
-    }
-</script>
+
 </body>  
 </html>  

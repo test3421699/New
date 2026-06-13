@@ -16,9 +16,6 @@
             display: block;
         }
     </style>
-    <!-- Link the Manifest -->
-<link rel="manifest" href="manifest_for_fire.json">
-<meta name="theme-color" content="#1976d2">
 
 <!-- Register the Service Worker -->
 
@@ -231,14 +228,6 @@
         // Start animation
         animate();
     </script>
-    <script>
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw_for_fire.js')
-        .then(reg => console.log('Service Worker registered!', reg))
-        .catch(err => console.error('Service Worker registration failed:', err));
-    });
-  }
-</script>
+    
 </body>
 </html>
