@@ -303,7 +303,7 @@
 
     // State  
     const state = {  
-        files: [], // { id, name, size, numPages, arrayBuffer, pdfDoc, rangeStr: 'All' }  
+        files: [], // { id, name, size, numPages, file, pdfDoc, rangeStr: 'All' }  
         layout: {  
             orientation: 'portrait', pagesPerSheet: 1, fitMode: 'contain',  
             mt: 10, mb: 10, ml: 10, mr: 10, gh: 5, gv: 5  
@@ -390,18 +390,18 @@
             if(f.type !== 'application/pdf') continue;  
               
             const id = 'f_' + Math.random().toString(36).substr(2, 9);  
-              
-            // FIX: Use a Blob URL for PDF.js so it doesn't steal the ArrayBuffer  
             const fileUrl = URL.createObjectURL(f);  
               
-            // Load info using PDF.js  
-            const pdfDoc = await pdfjsLib.getDocument(fileUrl).promise;  
-              
-            state.files.push({  
-                id, name: f.name, size: f.size, numPages: pdfDoc.numPages,  
-                file: f, // FIX: Store the raw File object instead of ArrayBuffer  
-                pdfDoc, rangeStr: ''  
-            });  
+            try {
+                const pdfDoc = await pdfjsLib.getDocument(fileUrl).promise;  
+                state.files.push({  
+                    id, name: f.name, size: f.size, numPages: pdfDoc.numPages,  
+                    file: f,  
+                    pdfDoc, rangeStr: ''  
+                });  
+            } catch(err) {
+                console.error("Error reading source PDF metadata: ", err);
+            }
         }  
         renderFileList();  
         buildThumbnails();  
@@ -434,20 +434,25 @@
                         <span class="file-meta">${file.numPages} Pages | ${formatSize(file.size)}</span>  
                     </div>  
                     <div class="file-actions">  
-                        <button title="Move Up" onclick="moveFile(${index}, -1)">▲</button>  
-                        <button title="Move Down" onclick="moveFile(${index}, 1)">▼</button>  
-                        <button class="btn-remove" title="Remove" onclick="removeFile('${file.id}')">  
+                        <button class="btn-move-up" title="Move Up">▲</button>  
+                        <button class="btn-move-down" title="Move Down">▼</button>  
+                        <button class="btn-remove" title="Remove">  
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>  
                         </button>  
                     </div>  
                 </div>  
                 <div>  
                     <label style="display:inline;font-size:0.8rem;">Pages:</label>  
-                    <input type="text" placeholder="e.g. 1-5, 8, 11-13 (Leave blank for All)" value="${file.rangeStr}"   
-                        onchange="updateRange('${file.id}', this.value)" style="width: calc(100% - 50px); padding:4px;">  
+                    <input type="text" class="input-range-str" placeholder="e.g. 1-5, 8, 11-13 (Leave blank for All)" value="${file.rangeStr}" style="width: calc(100% - 50px); padding:4px;">  
                 </div>  
             `;  
-              
+            
+            // Re-attached functional bindings cleanly bypassing dirty Global window bindings
+            el.querySelector('.btn-move-up').addEventListener('click', () => moveFile(index, -1));
+            el.querySelector('.btn-move-down').addEventListener('click', () => moveFile(index, 1));
+            el.querySelector('.btn-remove').addEventListener('click', () => removeFile(file.id));
+            el.querySelector('.input-range-str').addEventListener('change', (e) => updateRange(file.id, e.target.value));
+
             // Drag and Drop reordering logic  
             el.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', index); });  
             el.addEventListener('dragover', e => e.preventDefault());  
@@ -467,14 +472,14 @@
         });  
     };  
 
-    window.removeFile = (id) => {  
+    const removeFile = (id) => {  
         state.files = state.files.filter(f => f.id !== id);  
         renderFileList();  
         buildThumbnails();  
         els.btnGenerate.disabled = state.files.length === 0;  
     };  
 
-    window.moveFile = (idx, dir) => {  
+    const moveFile = (idx, dir) => {  
         if(idx + dir < 0 || idx + dir >= state.files.length) return;  
         const temp = state.files[idx];  
         state.files[idx] = state.files[idx+dir];  
@@ -483,7 +488,7 @@
         buildThumbnails();  
     };  
 
-    window.updateRange = (id, val) => {  
+    const updateRange = (id, val) => {  
         const f = state.files.find(f => f.id === id);  
         if(f) f.rangeStr = val;  
         buildThumbnails();  
@@ -575,7 +580,6 @@
         try {  
             const page = await file.pdfDoc.getPage(parseInt(pageIndex));  
             const viewport = page.getViewport({ scale: 1.0 });  
-            // Target width ~ 200px for thumbnail to save memory  
             const scale = 200 / viewport.width;   
             const scaledViewport = page.getViewport({ scale });  
 
@@ -603,7 +607,6 @@
         const paper = state.layout.orientation === 'portrait' ? A4_PORTRAIT : A4_LANDSCAPE;  
         const { pagesPerSheet, mt, mb, ml, mr, gh, gv } = state.layout;  
           
-        // Map Pages Per Sheet to Columns x Rows  
         const isPort = state.layout.orientation === 'portrait';  
         const grids = {  
             1: [1, 1], 2: isPort ? [1, 2] : [2, 1], 4: [2, 2],  
@@ -625,24 +628,20 @@
         const ctx = els.layoutPreview.getContext('2d');  
         const { paper, cols, rows, cellW, cellH, mt, ml, gh, gv } = getLayoutConfig();  
           
-        // Setup High-Res Canvas  
-        const scale = 4; // Render scale for sharpness  
+        const scale = 4;   
         els.layoutPreview.width = paper.w * scale;  
         els.layoutPreview.height = paper.h * scale;  
           
         ctx.scale(scale, scale);  
           
-        // Draw Paper Background  
         ctx.fillStyle = '#ffffff';  
         ctx.fillRect(0, 0, paper.w, paper.h);  
           
-        // Draw Margins Box (Dashed)  
         ctx.strokeStyle = '#ef4444';  
         ctx.lineWidth = 0.5;  
         ctx.setLineDash([2, 2]);  
         ctx.strokeRect(ml, mt, paper.w - ml - state.layout.mr, paper.h - mt - state.layout.mb);  
 
-        // Draw Cells  
         ctx.setLineDash([]);  
         ctx.fillStyle = 'rgba(37, 99, 235, 0.1)';  
         ctx.strokeStyle = '#2563eb';  
@@ -669,10 +668,8 @@
         }  
     };  
 
-    // Initial Draw  
     drawLayoutPreview();  
 
-    // Tabs Logic  
     els.tabs.forEach(tab => {  
         tab.addEventListener('click', () => {  
             els.tabs.forEach(t => t.classList.remove('active'));  
@@ -705,62 +702,52 @@
             const { fitMode } = state.layout;  
             const pps = state.layout.pagesPerSheet;  
 
-            // 1. Gather all pages across all files based on range  
             const embeddedPages = [];  
             let totalSrcPages = 0;  
 
-            for (let i = 0; i < state.files.length; i++) {
+            for (let i = 0; i < state.files.length; i++) {  
+                const f = state.files[i];  
+                // FIX: Added backticks around template string to solve syntax runtime crash
+                updateProgress(10, 'Loading PDFs...', `Processing ${f.name}`);  
+                await yieldMain();  
 
-const f = state.files[i];
-updateProgress(10, 'Loading PDFs...', Processing ${f.name});
-await yieldMain();
+                const arrayBuffer = await f.file.arrayBuffer();  
+                const srcDoc = await PDFDocument.load(arrayBuffer);  
+                const indices = parseRange(f.rangeStr, f.numPages);  
 
-// FIX: Read the ArrayBuffer fresh right when pdf-lib needs it
-const arrayBuffer = await f.file.arrayBuffer();
-const srcDoc = await PDFDocument.load(arrayBuffer);
-const indices = parseRange(f.rangeStr, f.numPages);
+                const copiedPages = await finalPdf.copyPages(srcDoc, indices);  
+                embeddedPages.push(...copiedPages);  
+                totalSrcPages += copiedPages.length;  
+            }  
 
-const copiedPages = await finalPdf.copyPages(srcDoc, indices);
-embeddedPages.push(...copiedPages);
-totalSrcPages += copiedPages.length;
-}
-
-// 2. Generate N-up Pages  
             const totalOutPages = Math.ceil(embeddedPages.length / pps);  
               
             for(let outIdx = 0; outIdx < totalOutPages; outIdx++) {  
-                // Update progress  
                 const pct = 20 + Math.floor((outIdx / totalOutPages) * 60);  
                 updateProgress(pct, 'Generating PDF Layout...', `Creating Output Page ${outIdx + 1} of ${totalOutPages}`);  
                 await yieldMain();  
 
-                // Create new A4 page  
                 const page = finalPdf.addPage([paper.w * MM_TO_PTS, paper.h * MM_TO_PTS]);  
                   
-                // Place items in grid  
                 for(let i = 0; i < pps; i++) {  
                     const srcIdx = outIdx * pps + i;  
                     if(srcIdx >= embeddedPages.length) break;  
 
                     const embPage = await finalPdf.embedPage(embeddedPages[srcIdx]);  
-                    const embDims = embPage.scale(1.0); // original width/height in pts  
+                    const embDims = embPage.scale(1.0);  
                       
                     const r = Math.floor(i / cols);  
                     const c = i % cols;  
 
-                    // Coordinates in MM from Top-Left  
                     const cellX_mm = ml + c * (cellW + gh);  
                     const cellY_mm = mt + r * (cellH + gv);  
 
-                    // Convert cell bounds to Points  
                     const cw_pts = cellW * MM_TO_PTS;  
                     const ch_pts = cellH * MM_TO_PTS;  
                       
-                    // PDF Origin is Bottom-Left, need to convert Y  
                     const pdfX = cellX_mm * MM_TO_PTS;  
                     const pdfY = (paper.h - (cellY_mm + cellH)) * MM_TO_PTS;   
 
-                    // Calculate scale based on fitMode  
                     const sx = cw_pts / embDims.width;  
                     const sy = ch_pts / embDims.height;  
                     let scale = 1;  
@@ -773,12 +760,9 @@ totalSrcPages += copiedPages.length;
                     const drawW = embDims.width * scale;  
                     const drawH = embDims.height * scale;  
 
-                    // Center in cell  
                     const drawX = pdfX + (cw_pts - drawW) / 2;  
                     const drawY = pdfY + (ch_pts - drawH) / 2;  
 
-                    // Draw with clipping to prevent overflow (especially in cover mode)  
-                    // Draw the scaled page into the layout cell  
                     page.drawPage(embPage, {  
                         x: drawX, y: drawY, width: drawW, height: drawH  
                     });  
@@ -788,7 +772,6 @@ totalSrcPages += copiedPages.length;
             updateProgress(90, 'Finalizing...', 'Saving bytes...');  
             await yieldMain();  
 
-            // 3. Save and Download  
             const pdfBytes = await finalPdf.save();  
             const blob = new Blob([pdfBytes], { type: 'application/pdf' });  
             const url = URL.createObjectURL(blob);  
@@ -808,8 +791,8 @@ totalSrcPages += copiedPages.length;
             els.progressOverlay.classList.remove('active');  
         }  
     });  
-
 </script>
+
 <!-- Service Worker Registration -->
 
 </body>  
