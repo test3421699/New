@@ -2,8 +2,7 @@
 <head>  
     <meta charset="UTF-8">  
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">  
-    <title>PDF Merger Pro</title>  <!-- PWA Minimal Inline Manifest -->  
-<!-- Proper Manifest Link -->
+    <title>PDF Merger Pro</title>  
 
 <meta name="apple-mobile-web-app-capable" content="yes">  
 
@@ -126,8 +125,7 @@
 </style>
 
 </head>  
-<body>  <!-- PWA Setup via Script Injection -->  
-
+<body>  
 
 <!-- Navbar -->  
 <nav class="navbar">  
@@ -159,7 +157,19 @@
                     <strong>Click or Drag PDFs here</strong>  
                     <input type="file" id="fileInput" multiple accept=".pdf">  
                 </label>  
-                <div class="file-list" id="fileList"></div>  
+                <div class="file-list" id="fileList"></div>
+                
+                <!-- Setup to add blank page with notes formatting -->
+                <div class="control-group" style="margin-top: 15px; background: var(--bg-panel); padding: 12px; border-radius: var(--radius); border: 1px solid var(--border);">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 8px;">
+                        <input type="checkbox" id="setAddBlank" style="width: auto; cursor: pointer;">
+                        Insert a blank page after each PDF
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin: 0;">
+                        <input type="checkbox" id="setAddNotesFormatting" style="width: auto; cursor: pointer;">
+                        Add "NOTES" heading & border to blanks
+                    </label>
+                </div>
             </div>  
 
             <!-- A4 Output Settings -->  
@@ -294,7 +304,8 @@
     // INITIALIZATION & SETUP  
     // ==========================================  
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';  
-    const { PDFDocument, PageSizes } = window.PDFLib;  
+    // Extract required features from PDFLib
+    const { PDFDocument, PageSizes, StandardFonts, rgb } = window.PDFLib;  
 
     // Constants  
     const A4_PORTRAIT = { w: 210, h: 297 };  
@@ -303,10 +314,12 @@
 
     // State  
     const state = {  
-        files: [], // { id, name, size, numPages, file, pdfDoc, rangeStr: 'All' }  
+        files: [],
         layout: {  
             orientation: 'portrait', pagesPerSheet: 1, fitMode: 'contain',  
-            mt: 10, mb: 10, ml: 10, mr: 10, gh: 5, gv: 5  
+            mt: 10, mb: 10, ml: 10, mr: 10, gh: 5, gv: 5,
+            addBlank: false,          
+            addNotesFormatting: false 
         },  
         theme: localStorage.getItem('theme') || 'light'  
     };  
@@ -351,7 +364,6 @@
         const el = document.getElementById(id);  
         const valEl = document.getElementById(`val${id.replace('set','')}`);  
           
-        // Load preset if exists  
         const saved = localStorage.getItem('pdf_presets');  
         if(saved) {  
             try { state.layout = { ...state.layout, ...JSON.parse(saved) }; } catch(e){}  
@@ -366,6 +378,18 @@
             drawLayoutPreview();  
         });  
     };  
+    
+    const bindCheckbox = (id, prop) => {
+        const el = document.getElementById(id);
+        const saved = localStorage.getItem('pdf_presets');
+        if(saved) {
+            try { state.layout = { ...state.layout, ...JSON.parse(saved) }; } catch(e){}
+        }
+        el.checked = !!state.layout[prop];
+        el.addEventListener('change', (e) => {
+            state.layout[prop] = e.target.checked;
+        });
+    };
 
     bindInput('setOrientation', 'orientation');  
     bindInput('setPagesPerSheet', 'pagesPerSheet', true);  
@@ -373,6 +397,8 @@
     bindInput('setMt', 'mt', true); bindInput('setMb', 'mb', true);  
     bindInput('setMl', 'ml', true); bindInput('setMr', 'mr', true);  
     bindInput('setGh', 'gh', true); bindInput('setGv', 'gv', true);  
+    bindCheckbox('setAddBlank', 'addBlank'); 
+    bindCheckbox('setAddNotesFormatting', 'addNotesFormatting');
 
     els.btnPresets.addEventListener('click', () => {  
         localStorage.setItem('pdf_presets', JSON.stringify(state.layout));  
@@ -447,13 +473,11 @@
                 </div>  
             `;  
             
-            // Re-attached functional bindings cleanly bypassing dirty Global window bindings
             el.querySelector('.btn-move-up').addEventListener('click', () => moveFile(index, -1));
             el.querySelector('.btn-move-down').addEventListener('click', () => moveFile(index, 1));
             el.querySelector('.btn-remove').addEventListener('click', () => removeFile(file.id));
             el.querySelector('.input-range-str').addEventListener('change', (e) => updateRange(file.id, e.target.value));
 
-            // Drag and Drop reordering logic  
             el.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', index); });  
             el.addEventListener('dragover', e => e.preventDefault());  
             el.addEventListener('drop', e => {  
@@ -505,7 +529,6 @@
         els.thumbnailsContainer.classList.toggle('list-view');  
     });  
 
-    // Parse Custom Range  
     const parseRange = (rangeStr, maxPages) => {  
         if (!rangeStr || !rangeStr.trim() || rangeStr.trim().toLowerCase() === 'all') {  
             return Array.from({length: maxPages}, (_, i) => i);  
@@ -529,7 +552,6 @@
         return Array.from(indices).sort((a,b)=>a-b);  
     };  
 
-    // Intersection Observer for Lazy Rendering  
     const thumbObserver = new IntersectionObserver((entries) => {  
         entries.forEach(entry => {  
             if (entry.isIntersecting) {  
@@ -555,7 +577,7 @@
                 const thumb = document.createElement('div');  
                 thumb.className = 'thumb-item';  
                 thumb.dataset.fileId = file.id;  
-                thumb.dataset.pageIndex = pageIndex + 1; // 1-based for UI  
+                thumb.dataset.pageIndex = pageIndex + 1;  
                   
                 thumb.innerHTML = `  
                     <div class="thumb-img-wrapper" id="img_${file.id}_${pageIndex}">  
@@ -702,12 +724,17 @@
             const { fitMode } = state.layout;  
             const pps = state.layout.pagesPerSheet;  
 
+            // Embed notes font if requested
+            let notesFont;
+            if (state.layout.addNotesFormatting) {
+                notesFont = await finalPdf.embedFont(StandardFonts.HelveticaBold);
+            }
+
             const embeddedPages = [];  
             let totalSrcPages = 0;  
 
             for (let i = 0; i < state.files.length; i++) {  
                 const f = state.files[i];  
-                // FIX: Added backticks around template string to solve syntax runtime crash
                 updateProgress(10, 'Loading PDFs...', `Processing ${f.name}`);  
                 await yieldMain();  
 
@@ -718,10 +745,19 @@
                 const copiedPages = await finalPdf.copyPages(srcDoc, indices);  
                 embeddedPages.push(...copiedPages);  
                 totalSrcPages += copiedPages.length;  
+
+                // Insert a null placeholder for the blank page
+                if (state.layout.addBlank) {
+                    embeddedPages.push(null);
+                    totalSrcPages += 1;
+                }
             }  
 
             const totalOutPages = Math.ceil(embeddedPages.length / pps);  
-              
+            
+            // Helper function to safely format SVG coordinates preventing scientific notation crashes
+            const fmt = (num) => Number(num).toFixed(2);
+            
             for(let outIdx = 0; outIdx < totalOutPages; outIdx++) {  
                 const pct = 20 + Math.floor((outIdx / totalOutPages) * 60);  
                 updateProgress(pct, 'Generating PDF Layout...', `Creating Output Page ${outIdx + 1} of ${totalOutPages}`);  
@@ -733,14 +769,14 @@
                     const srcIdx = outIdx * pps + i;  
                     if(srcIdx >= embeddedPages.length) break;  
 
-                    const embPage = await finalPdf.embedPage(embeddedPages[srcIdx]);  
-                    const embDims = embPage.scale(1.0);  
-                      
-                    const r = Math.floor(i / cols);  
-                    const c = i % cols;  
+                    const srcPageToEmbed = embeddedPages[srcIdx];
 
-                    const cellX_mm = ml + c * (cellW + gh);  
-                    const cellY_mm = mt + r * (cellH + gv);  
+                    // PRE-CALCULATE grid coordinates for the cell layout
+                    const r_idx = Math.floor(i / cols);  
+                    const c_idx = i % cols;  
+
+                    const cellX_mm = ml + c_idx * (cellW + gh);  
+                    const cellY_mm = mt + r_idx * (cellH + gv);  
 
                     const cw_pts = cellW * MM_TO_PTS;  
                     const ch_pts = cellH * MM_TO_PTS;  
@@ -748,6 +784,56 @@
                     const pdfX = cellX_mm * MM_TO_PTS;  
                     const pdfY = (paper.h - (cellY_mm + cellH)) * MM_TO_PTS;   
 
+                    // If it's a blank space (null placeholder)
+                    if (!srcPageToEmbed) {
+                        if (state.layout.addNotesFormatting) {
+                            
+                            // 1. Calculate 20px inward margin
+                            const margin = 20;
+                            const newX = pdfX + margin;
+                            const newY = pdfY + margin;
+                            const newW = cw_pts - (margin * 2);
+                            const newH = ch_pts - (margin * 2);
+
+                            if (newW > 0 && newH > 0) {
+                                // 2. Calculate 20px border radius
+                                const r = Math.min(20, newW / 2, newH / 2);
+                                const k = r * 0.55228475; // Magic constant for perfect bezier circles
+
+                                // 3. Build SVG Path safely formatted without commas or scientific notation
+                                const path = `M ${fmt(r)} 0 L ${fmt(newW - r)} 0 C ${fmt(newW - r + k)} 0 ${fmt(newW)} ${fmt(r - k)} ${fmt(newW)} ${fmt(r)} L ${fmt(newW)} ${fmt(newH - r)} C ${fmt(newW)} ${fmt(newH - r + k)} ${fmt(newW - r + k)} ${fmt(newH)} ${fmt(newW - r)} ${fmt(newH)} L ${fmt(r)} ${fmt(newH)} C ${fmt(r - k)} ${fmt(newH)} 0 ${fmt(newH - r + k)} 0 ${fmt(newH - r)} L 0 ${fmt(r)} C 0 ${fmt(r - k)} ${fmt(r - k)} 0 ${fmt(r)} 0 Z`;
+
+                                // Draw the path placing its (0,0) origin at the top-left of our calculated box
+                                page.drawSvgPath(path, {
+                                    x: newX,
+                                    y: newY + newH, 
+                                    borderColor: rgb(0, 0, 0),
+                                    borderWidth: 1
+                                });
+                                
+                                // 4. Center "NOTES" title
+                                const fontSize = 14;
+                                const titleText = "NOTES";
+                                const textWidth = notesFont.widthOfTextAtSize(titleText, fontSize);
+                                
+                                if (newH > fontSize + 15) {
+                                    page.drawText(titleText, {
+                                        x: newX + (newW - textWidth) / 2,
+                                        y: newY + newH - fontSize - 15,
+                                        size: fontSize,
+                                        font: notesFont,
+                                        color: rgb(0, 0, 0),
+                                    });
+                                }
+                            }
+                        }
+                        continue;
+                    }
+
+                    // For an actual document page, proceed with normal embedding
+                    const embPage = await finalPdf.embedPage(srcPageToEmbed);  
+                    const embDims = embPage.scale(1.0);  
+                      
                     const sx = cw_pts / embDims.width;  
                     const sy = ch_pts / embDims.height;  
                     let scale = 1;  
@@ -793,7 +879,5 @@
     });  
 </script>
 
-<!-- Service Worker Registration -->
-
 </body>  
-</html>  
+</html>
